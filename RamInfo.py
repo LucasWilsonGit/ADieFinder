@@ -1,3 +1,6 @@
+import operator
+from typing import Any, Callable
+
 class ModelReader:
     position : int = 0
     model_code : str = ""
@@ -204,4 +207,58 @@ class RamInfo:
         vendor_procs.get(self.vendor, self.foo)(self.model)
 
     def __str__(self):
-        return f"{self.vendor} {self.model} {self.megaherz_base}MHz {self.size_GB}GB"
+        return f"{self.vendor} {self.model} {self.megaherz_base}MHz {self.size_GB}GB {self.chipset} {self.DDR}"
+
+#pain
+def rcontains(a,b):
+    return operator.contains(b, a)
+
+class FilterEntry:
+    comparator : Callable = operator.gt 
+    value : Any = 0
+    __op_lookup : dict = {
+        "==" : operator.eq,
+        "!=" : operator.ne,
+        "in" : rcontains,
+        ">" : operator.gt,
+        "<" : operator.lt,
+        ">=" : operator.ge,
+        "<=" : operator.le
+    }
+
+    def __init__(self, comparator : Callable | str, value : Any):
+        self.value = value
+
+        if isinstance(comparator, str):
+            assert comparator in self.__op_lookup, f"Invalid comparator string {comparator}!"
+            comparator = self.__op_lookup[comparator]
+
+        self.comparator = comparator
+    
+    def __call__(self, operand : Any) -> bool:
+        print(self.comparator, operand, self.value)
+        if type(self.value) in [int, float]:
+            return self.comparator(int(operand), self.value)
+        return self.comparator(operand, self.value)
+
+def apply_filters(stick : RamInfo, filters : dict[str, FilterEntry]) -> bool:
+    """
+    Little easy function for checking whether a RamInfo matches a set of filters
+    """
+    for property, filter in filters.items():
+        if not filter(stick.__getattribute__(property)):
+            return False
+    
+    return True
+
+def match_sticks(infos : list[RamInfo], filters : dict[str, FilterEntry]) -> list[RamInfo]:
+    """
+    Filters the list of ram stick infos
+    """
+    result : list[RamInfo] = []
+
+    for stick in infos:
+        if apply_filters(stick, filters):
+            result.append(stick)
+
+    return result
