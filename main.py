@@ -1,5 +1,6 @@
 import requests
 
+import gigabyte
 import msi
 import asus#only knows the brand of chip, not which specific chip i.e SK Hynix [A die (this is missing in the ASUS dataset)]
 from RamInfo import RamInfo, match_sticks, FilterEntry
@@ -8,10 +9,10 @@ from RamInfo import RamInfo, match_sticks, FilterEntry
 
 sticks = msi.pull_entries()
 filter = {
-    "vendor" : FilterEntry("in", ["CORSAIR", "Kingston", "Team Group", "TEAM GROUP", "T-FORCE"]),
-    "megaherz_base" : FilterEntry(">=", 6400),
-    #"chipset" : FilterEntry("in", ["SK hynix A"])
+    "chipset"   : FilterEntry("in", ["Hynix A", "SK Hynix", "SK Hynix A", "SK hynix A"]),
+    "size_GB"      : FilterEntry("==", "16")
+    #"product_line" : FilterEntry("==", "T-CREATE")
 }
-
-for stick in match_sticks(sticks, filter):
-    print(stick)
+sticks = match_sticks(sticks, filter)
+for stick in sticks:
+    print(stick, stick.timings)

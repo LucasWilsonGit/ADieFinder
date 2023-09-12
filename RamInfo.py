@@ -33,6 +33,16 @@ class ModelReader:
         self.position = 0
         return res
     
+    def try_read_until_any(self, chars : str, maxread=500) -> str:
+        for x in range(maxread):
+            try:
+                if self.model_code[self.position+x] in chars:
+                    return self.read(x)
+            except IndexError:
+                return self.read(x)
+            
+        return self.read(maxread)
+    
     def step(self, count : int) -> None:
         """
         steps the reader head by count chars
@@ -43,14 +53,35 @@ class ModelReader:
 
 
 
-class RamInfo:
+class RamInfo(object):
     vendor          : str = "Unknown",
     model           : str = "Unknown",
     DDR             : str = "Unknown",
     megaherz_base   : str = "Unknown",
     chipset         : str = "Unknown",
     size_GB         : str = "Unknown",
-    timings         : str = "Unknown"
+    timings         : str = "Unknown",
+
+    extra_fields    : dict = {}
+    """
+    description: 
+    dimm_type: 
+    """
+    def __init__(self):
+        self.extra_fields = {}
+
+    def __str__(self):
+        return f"{self.vendor} {self.model} {self.megaherz_base}MHz {self.size_GB}GB {self.chipset} {self.DDR}"
+
+    def __getattr__(self, __name: str) -> Any:
+        _dict = super().__getattribute__("__dict__")
+        efields = super().__getattribute__("extra_fields")
+        if __name in _dict:
+            return _dict[__name]
+        elif __name in efields:
+            return efields[__name]
+        else:
+            return "Unknown"
     
     def __proc_teamgroup(self, model_code : str) -> None:
         """
@@ -58,10 +89,44 @@ class RamInfo:
         https://www.teamgroupinc.com/en/info/ins.php?index_id=90
         FF4D532G7800HC36DDC01
         """
-        reader = ModelReader(model_code)
+        reader = ModelReader(model_code[:-2])
         
-        product_line = reader.read(1)
-        product_meta = reader.read_until("D")
+        prod_line_map = {
+            "T"     : "TEAM",
+            "F"     : "T-FORCE",
+            "C"     : "T-CREATE"
+        }
+        self.extra_fields["product_line"] = prod_line_map[reader.read(1)]
+
+        meta_map = {
+            "B"     : "TEAM OC (EXPO)",
+            "C"     : "TEAM OC (XMP)",
+            "E"     : "ELITE",
+            "PB"    : "ELITE+ Black",
+            "PS"    : "ELITE+ Silver",
+            "LB"    : "VULCAN Black",
+            "LR"    : "VULCAN Red",
+            "LAB"   : "VULCAN-Alpha Black",
+            "LAR"   : "VULCAN-Alpha Red",
+            "O"     : "OEM",
+            "F0"    : "LED RGB XMP",
+            "F3"    : "DELTA RGB Black",
+            "F4"    : "DELTA RGB White",
+            "F5"    : "DELTA RGB TUF Gaming Alliance",
+            "F6"    : "DELTA RGB Valkyrie",
+            "F7"    : "Delta-Alpha Black",
+            "F8"    : "Delta-Alpha White",
+            "F9"    : "XTREEM ARGB Black",
+            "FX"    : "XTREEM Black",
+            "G0"    : "LED RGB EXPO",
+            "TC"    : "T-CREATE",
+            "TCO"   : "T-CREATE OC",
+            "TCC"   : "CLASSIC",
+            "TCE"   : "EXPERT",
+            "TCW"   : "EXPERT White",
+            "TCP"   : "EXPERT Pink"
+        }
+        self.extra_fields["product_meta"] = reader.read_until("D")
         reader.step(1)
         
         self.DDR=f"DDR{reader.read(1)}"
@@ -76,7 +141,8 @@ class RamInfo:
             heatsink = "No heatsink"
             reader.step(-1)
         
-        timings = reader.read_until_any("DQO -S0B")
+
+        timings = reader.try_read_until_any("DQO -S", 4)
         timings_map = {
             "C28"   : "28-34-34-76",
             "C30"   : "30-36-36-76",
@@ -105,9 +171,34 @@ class RamInfo:
             "C40C"  : "40-40-40-76",
             "C42"   : "42-42-42-84",
             "C46"   : "46-46-46-90",
+            "C46B"  : "46-46-46-90", #This doesnt actually exist it's a parse issue with ELITE kits which don't follow the name decode spec that it's easier to resolve by just doing this.
             "C48"   : "48-48-48-96"
         }
-        self.timings = timings_map.get(timings, 1)
+        self.timings = timings_map[timings]
+
+        kc_map = {
+            "D" : 2,
+            "Q" : 4,
+            "O" : 8
+        }
+        kitcount = reader.read(1)
+        if kitcount in ["D", "Q", "O"]:
+            kitcount = kc_map[kitcount]
+            reader.step(1)
+        else:
+            reader.step(-1)
+            kitcount = 1
+        self.extra_fields["kitcount"]=kitcount
+
+        mod_type = reader.read(1)
+        if mod_type == "-":
+            mod_type = "SODIMM"
+            reader.step(1)
+        else:
+            mod_type = "UDIMM"
+            reader.step(-1)
+        self.extra_fields["mod_type"]=mod_type
+
     
     def __proc_kingston(self, model_code : str) -> None:
         """
@@ -199,6 +290,7 @@ class RamInfo:
             "Team Group"    : self.__proc_teamgroup,
             "T-FORCE"       : self.__proc_teamgroup,
             "TEAMGROUP"     : self.__proc_teamgroup,
+            "TEAM GROUP"    : self.__proc_teamgroup,
             "Kingston"      : self.__proc_kingston,
             "ADATA"         : self.__proc_ADATA,
             "ADATA(XPG)"    : self.__proc_ADATA,
@@ -206,24 +298,27 @@ class RamInfo:
         }
         vendor_procs.get(self.vendor, self.foo)(self.model)
 
-    def __str__(self):
-        return f"{self.vendor} {self.model} {self.megaherz_base}MHz {self.size_GB}GB {self.chipset} {self.DDR}"
+    
 
 #pain
 def rcontains(a,b):
     return operator.contains(b, a)
 
+def nin(a,b):
+    return b not in a
+
 class FilterEntry:
     comparator : Callable = operator.gt 
     value : Any = 0
     __op_lookup : dict = {
-        "==" : operator.eq,
-        "!=" : operator.ne,
-        "in" : rcontains,
-        ">" : operator.gt,
-        "<" : operator.lt,
-        ">=" : operator.ge,
-        "<=" : operator.le
+        "=="            : operator.eq,
+            "!="            : operator.ne,
+        "in"            : rcontains,
+            "not in"        : nin,
+        ">"             : operator.gt,
+            "<"             : operator.lt,
+        ">="            : operator.ge,
+            "<="            : operator.le
     }
 
     def __init__(self, comparator : Callable | str, value : Any):
@@ -236,7 +331,6 @@ class FilterEntry:
         self.comparator = comparator
     
     def __call__(self, operand : Any) -> bool:
-        print(self.comparator, operand, self.value)
         if type(self.value) in [int, float]:
             return self.comparator(int(operand), self.value)
         return self.comparator(operand, self.value)
@@ -246,7 +340,7 @@ def apply_filters(stick : RamInfo, filters : dict[str, FilterEntry]) -> bool:
     Little easy function for checking whether a RamInfo matches a set of filters
     """
     for property, filter in filters.items():
-        if not filter(stick.__getattribute__(property)):
+        if not filter(stick.__getattr__(property)):
             return False
     
     return True

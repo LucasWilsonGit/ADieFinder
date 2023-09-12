@@ -6,10 +6,11 @@ url = "https://rog.asus.com/support/webapi/product/GetPDQVLMemory?website=global
 
 def get_stick_info(json : dict) -> RamInfo:
     info = RamInfo()
+
     info.vendor = json["Vendors"]
     info.model = json["PartNo"]
     info.megaherz_base = json["RAMSpeed"]
-    info.chipset = json["ChipBrand"]
+    info.chipset = json["ChipBrand"]   #Only specifies the brand and not which specific IC so it's a bit useless isn't it? 
     info.timings = json["Timing"]
     info.size_GB = (json["Size"]).replace("GB", "")
     info.process_modelcode()
@@ -25,5 +26,5 @@ def pull_entries() -> list[RamInfo]:
 
     items : list[dict] = json["Result"]["Obj"]
     infos : list[RamInfo] = [get_stick_info(item) for item in items]
-    infos.sort(key = lambda x: x.megaherz_base, reverse=True)
+    infos.sort(key = lambda x: x.megaherz_base)
     return infos
