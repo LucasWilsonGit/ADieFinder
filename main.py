@@ -7,9 +7,9 @@ from RamInfo import RamInfo, match_sticks, FilterEntry
 
 
 
-sticks = msi.pull_entries()
+sticks = gigabyte.pull_entries()
 filter = {
-    "chipset"   : FilterEntry("in", ["Hynix A", "SK Hynix", "SK Hynix A", "SK hynix A"]),
+    "chipset"   : FilterEntry("in", ["Hynix M", "SK Hynix", "SK Hynix M", "SK hynix M"]),
     "size_GB"      : FilterEntry("==", "16")
     #"product_line" : FilterEntry("==", "T-CREATE")
 }

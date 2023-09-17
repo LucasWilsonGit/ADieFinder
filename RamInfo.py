@@ -171,7 +171,7 @@ class RamInfo(object):
             "C40C"  : "40-40-40-76",
             "C42"   : "42-42-42-84",
             "C46"   : "46-46-46-90",
-            "C46B"  : "46-46-46-90", #This doesnt actually exist it's a parse issue with ELITE kits which don't follow the name decode spec that it's easier to resolve by just doing this.
+            "C46B"  : "46-46-46-90", #This doesnt actually exist it's a parse issue with ELITE kits which can just have a few of the fields blank and be a bit of effort to parse
             "C48"   : "48-48-48-96"
         }
         self.timings = timings_map[timings]
